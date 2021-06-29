@@ -1,4 +1,4 @@
-# Data analytics reports 
+# Data Analytics Reports 
 ## Introduction
 This repository only stores .RMD reports for primary data processing and analysis.
 ### Topics include:
