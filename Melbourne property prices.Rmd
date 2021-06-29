@@ -1,0 +1,404 @@
+---
+title: "Melbourne property prices"
+author: "Bingqing Hua"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, warning = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE,
+  collapse = TRUE,
+  comment = "",
+  fig.height = 8,
+  fig.width = 12,
+  fig.align = "center",
+  cache = FALSE
+)
+```
+
+
+# Data
+
+*[Melbourne property prices have taken their biggest hit since 2012, falling by almost 2 per cent in the past three months](https://www.domain.com.au/news/melbourne-median-house-price-falls-to-882082-over-june-quarter-domain-group-report-20180726-h134ao-754199/)* Jim Malo, Jul 26 2018, Domain
+
+This report explores the data provided on [Melbourne house prices by Anthony Pino](https://www.kaggle.com/anthonypino/melbourne-housing-market). The goal is to examine whether housing prices have cooled in Melbourne, and help Anthony decide whether it is time to buy a two bedroom apartment in Northcote. 
+
+
+
+# Make a map of Melbourne showing the locations of the properties. 
+
+
+```{r echo=FALSE}
+library(tidyverse)
+library(lubridate)
+library(leaflet)
+library(janitor)
+library(here)
+library(base)
+
+  house <- read_csv(file = "data/Melbourne_housing_FULL.csv")%>%
+  clean_names() %>%
+  # rename the longitude and latitude to lon and lat.
+  rename("lat" = "lattitude", "lon"="longtitude") %>%
+  # make the date variable into date format (of format date, month, year)
+  mutate(date=dmy(date)) 
+  house
+
+class(ndates1)
+
+
+library(ggmap)
+# code used to download the maps
+# NOTE THAT YOU DO NOT NEED TO RUN THIS CODE HERE
+# map <- get_map(location = c(145.0, -37.8), zoom = 10)
+# write_rds(map,
+#           "2019/assignment-3-2019-s2/data/vic_map.rds",
+#           compress = "xz")
+
+# load the map tile
+vic_map <- read_rds(here::here ("data",
+                               "vic_map.rds"))
+
+# plot the map info
+library(ggmap)
+ggmap(vic_map) + 
+  geom_point(data = house, 
+             # plot the longitude by latitude
+             # add some tranparency
+             aes(x = lon,
+                 y = lat), 
+             # make the points a colour, make them smaller points, and 
+             # add some transparency
+            color = "navyblue",
+            size= 0.5,
+            alpha = 0.2)
+
+```
+> Most of properties are located between lon 144.8 and 145.2, lat -37.6 and -39.
+
+# Question 2. We are going to examine the prices of 2 bedroom flats in Northcote. 
+
+## Filter the data to focus only on the records for Northcote, and to only look at units (where type is "u"). Then, make a plot of Date by Price, facetted by number of bedrooms, and state what you learn
+    
+
+```{r filter-northcote}
+northcote <- house %>%
+  filter(suburb == "Northcote") %>%
+  filter(type =="u")
+
+ggplot(house,
+       aes(date,
+           price)) +
+  geom_point() + 
+  facet_wrap(~bedroom2,
+             ncol = 2)
+```
+
+> By looking at the plot, the price of all one bedroom properties were lower than $500000; the price of two bedroom properties were lower than $1000000; there are only one three bedroom properties. There are many NA values. The price of one bedroom properties did not rise much from 2016 to 2018. There are a slightly upward trend for two bedrooms properties. There are two outliers in NA value. Because we do not know the number of bedrooms, probably it has higher value because it has more bedrooms.
+
+## Explore the amount of missing data in the northcote data, and descrie the amount of missing data in a couple of sentences.
+
+```{r vis-missing}
+library(visdat)
+vis_miss(northcote)
+```
+
+> There are 21.4% missing data in total. Building_area has 54 missing values which is 75% of total observations; year_built has 49 missing values which is 68.1% of total observations; landsize has 39 missing values which is 54.2% of total observations; bedroom2, bathroom, car, lat, lon has 35 missing values respectively, each of these variable has 48.6% of total observations respectively; price has 6 missing values which is 8.33% of total observations.
+
+## Use the `simputation` package to impute missing values for bedroom2, based on a linear regression, imputing with `bedroom2` as the response and `room` as the predictor (covered in class). Make sure your predicted value is an integer. Re-make the plot of Price over Date, facetted by number of bedrooms. 
+
+```{r impute-data}
+library(naniar)
+library(simputation)
+northcote_imp <- northcote %>%
+  bind_shadow() %>%
+  impute_lm(bedroom2 ~ rooms) %>%
+  # round any bedroom2 values down to integers with the `round` function
+  mutate(int_bedrooms = round(bedroom2, digits = 0))
+
+# plot the imputed northcote data
+ggplot(northcote_imp,
+       aes(x = date,
+           y = price)) +
+  geom_point() + 
+  facet_wrap(northcote$rooms,  
+             ncol = 1)
+```
+    
+## Write a description of what you learn from the plot, particularly about the trend of 2 bedroom unit prices in Northcote.
+
+> The x-axis represents the Date from January 2016 to January 2018 and the y-axis represents the price of the units across this time period. The price of units with 2 bedrooms follows a cyclical pattern with a slight increasing trend overall, but dips in April 2018 to $500,000. Price rises generally occur in in the period following January (around March) and July (around September) and price rises are followed by price dips relatively quickly. The highest price observed across this time for 2 bedroom units is $750,000.
+
+# Focusing on 2 bedroom units, we are going to explore the trend in prices for each suburb.  
+
+# Take the full housing data, and filter the data down to only **units** with 2 bedrooms. Then filter the data to only keep suburbs where there are more than 5 observations. Then impute the Bedroom2 variable, in the same way done in the previous question. 
+
+```{r impute-house}
+house_two_bed <- house %>%
+  # filter the data down to only **units** with 2 bedrooms
+  filter(bedroom2 == 2) %>%
+  filter(type == "u") %>%
+  # add counts of the suburbs
+  add_count(suburb) %>%
+  # keep n greater than or equal t 5
+  filter(n >= 5) %>%
+  # add a new column, days, which is the numer of days since the start
+  mutate(days = as.numeric(ymd(date) - ymd("2016-01-28")))
+
+house_impute <- house_two_bed %>%
+  # now impute bedroom2 using the same technique as the last code chunk.
+  # and round any values down to integers with the `round` function
+  bind_shadow() %>%
+  impute_lm(bedroom2 ~ rooms) %>%
+  mutate(predication = round(bedroom2, digits = 0))
+ 
+  
+```
+
+```{r eda}
+
+# you can explore the range in the counts of suburbs here if you like
+house %>%
+  count(suburb, 
+        sort = TRUE) %>% 
+  ggplot(aes(x = n)) + 
+  geom_histogram()
+
+```
+
+# Using this imputed data, fit a linear model to each suburb (many models approach) - predicting price with days. Collect the model estimates, and also the model fit statistics. Make a plot of intercept vs slope. Using plotly what suburb has had the largest increase, which has had the biggest decrease in prices?
+
+```{r many-models}
+library(purrr)
+
+by_suburb <- house_impute %>%
+  select(suburb, date, price, days) %>%
+  group_by(suburb) %>%
+  nest()
+  # select suburb, date, price, days
+  # group by suburb
+  # nest
+
+library(broom)
+  suburb_model <- by_suburb %>%
+    # predict price by days
+    mutate(model = map(data, ~ function(x){
+      lm( price ~ days, data = x)}),
+           # now map the tidy function to model column
+           tidy = map(model, tidy),
+         # now map the glance function to model column
+         glance = map(model, glance))  
+
+suburb_coefs <- suburb_model %>%
+  # unnest the tidy results
+  unnest(tidy) %>%
+  # select suburb, term, estimate
+  select(suburb, 
+         term, 
+         estimate) %>%
+  # spread the term and estimate values out
+  spread(key = term, value = estimate)
+  # clean up the resulting variable names
+  
+```
+
+
+```{r fig.height=4, fig.width=4}
+p <- ggplot(suburb_coefs,
+  aes(x = intercept,
+      y = slop,
+      label = suburb)) +
+  geom_point(alpha = 0.5, 
+             size = 2)
+
+library(plotly)
+ggplotly(p)
+```
+
+
+# Summarise the $R^2$ for the model fits for all the suburbs. Which suburbs have the worst fitting models?  Plot the Price vs Date of the best fitting model. Is the best fitting model a good fit?
+
+```{r fig.height=3, fig.width=8}
+suburb_glance <- suburb_model %>%
+  # select subur and glance
+  select(suburb, glance) %>%
+  # unnest the glance data
+  unnest(glance)
+
+# visualise the distribution of the r.squared values using geom_histogram
+p1 <- ggplot(data = suburb_glance, 
+             aes(x = r.squared)) + 
+  geom_histogram()
+
+p1 
+
+# filter out the data so you only keep the ones with a good/high r squared (given the possible r squared data)
+# call this new dataset, `bestfit`
+bestfit <- suburb_glance %>%  filter(r.squared>0.8)
+
+# filter to keep the worst fitting ones - remove those with low r squared values
+worstfit <- suburb_glance %>% filter(r.squared<0.002)
+# now subset the imputed house data to contain suburbs
+# within these best fit suburbs
+house_impute_best <- house_impute %>% filter(suburb %in% bestfit$suburb)
+house_impute_worst <- house_impute %>% filter(suburb%in% worstfit$suburb)
+
+# now create a plot of the price over time
+p2 <- ggplot(house_impute_best,
+             aes(x=days,y=price))+
+  geom_smooth(method = "lm",se=FALSE)
+p2
+
+library(gridExtra)
+# plot these in a grid
+grid.arrange(p1, p2, ncol = 2)
+
+# This code investigates the worst fit
+ggplot(data = house_impute_worst, 
+       aes(x=days, y=price))+
+  geom_point()+ 
+  facet_wrap(~suburb, ncol = 3)
+
+```
+
+
+#  Still focusing on apartments (units) examine the results of the auctions, with the Method variable, across suburbs. This variable contains results of the auction, whether the property sold, or not. It may be that in recent months there is a higher proportion of properties that didn't sell. This would put downward pressure on prices. 
+
+## Compute the counts of the levels of Method, ignoring the suburbs. 
+
+
+
+```{r fig.width=8, fig.height=3}
+# The code computes the proportion of properties in the PI or VB categories for each month. This is the proportion of properties that did not sell.
+house %>% count(method,
+                sort=TRUE)
+```
+
+## The categories PI (passed in) and VB (vendor bid) indicate the property did not sell. Compute the proportion of properties in these two categories for each suburb, for each month since 2016. 
+
+```{r}
+  house_month <- house %>%
+  # create year and month variale
+  mutate(year = year(house$date), 
+         month = month(house$date)) %>%
+  # group by subur, year, month, and count the number of methods
+  group_by(suburb, 
+           year, 
+           month) %>%
+  count(method) %>%
+  # calculate the proportion of methods
+  mutate(proportion = n / sum(house_month$n)) %>%
+  # keep only PI and VB
+  filter(method %in% c("PI", "VB")) %>%
+  # create time, the number of months since the start
+  mutate(time = (year - 2016) *12 + month  )
+```
+
+
+## Plot the proportions against year/month (make a new variable time is an integer with 1 being the first month of the data in 2016 and each month since then increments time by 1).  Add a smoother to show the trend in these proportions. Does it look like there is an increase in units that aren't selling?
+
+```{r}
+p <- ggplot(house_month,
+            aes(x = time,
+                y = proportion, 
+               label = suburb)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap( ~ method)
+
+ggplotly(p)
+```
+
+
+## Explain why the data was aggregated to month before computing the proportions. 
+
+> Answer: Month is the most suitful bin width in order to show the value in house. If we use quarter as variable,there will be much unclear to understand the difference between each suburb.
+
+# Question 5. Using the full housing data, fit the best model for Price that you can, for houses around Monash University.
+
+## Impute the missing values for Bathroom (similarly to Bedroom2).
+
+```{r}
+house_impute_bathroom <- house %>%
+  bind_shadow() %>%
+  impute_lm(bathroom ~ rooms)
+  house_impute_bathroom$bathroom = round(house_impute_bathroom$bathroom, digits = 0)
+```
+
+
+## Subset the data to be **houses*** in these suburbs "Notting Hill", "Glen Waverley", "Clayton", "Clayton South","Oakleigh East", "Huntingdale",  "Mount Waverley".
+
+```{r}
+  monash <- house_impute_bathroom %>%
+  filter(suburb %in% c("Notting Hill",
+                       "Glen Waverley",
+                       "Clayton",
+                       "Clayton South",
+                       "Oakeigh East", 
+                       "Huntingdale",
+                       "Mount Waverley")) %>%
+  filter(type == "h") %>%
+  select(suburb, 
+         price, 
+         rooms, 
+         date, 
+         bedroom2, 
+         bathroom, 
+         car, 
+         landsize) %>%
+  # count the number of days from the start.
+  mutate(day = as.numeric(ymd(monash$date) - min(monash$date)))
+
+```
+
+
+##  Make a scatterplot of Price vs Date by Bedroom2 and Bathroom, with a linear model overlaid. What do you notice? There are only some combinations of bedrooms and bathrooms that are common. Subset your data to houses with 3-4 bedrooms and 1-2 bathrooms. 
+
+```{r}
+monash_filter <- monash %>% 
+  filter(bathroom %in% c(1,2),
+         bedroom2 %in% c(3,4))
+ggplot(monash_filter, aes(x = date,
+                 y = price)) +
+  geom_point() +
+  facet_grid(bathroom ~ bedroom2) +
+  geom_smooth(method = "lm",na.rm = TRUE)
+```
+
+
+##  Using date, rooms, bedroom, bathroom, car and landsize build your best model for price. There are some missing values on Car and Landsize, which may be important to impute. Think about interactions as well as main effects. (There are too many missing values to use BuildingArea and YearBuilt. The other variables in the data don't make sense to use.)
+    
+```{r }
+library(broom)
+# try a few different models!
+monash_fit <- lm(price ~ rooms, data = monash)
+tidy(monash_fit)
+glance(monash_fit)
+
+monash_fit2 <- lm(price ~ bedroom2, data = monash)
+tidy(monash_fit2)
+glance(monash_fit2)
+
+monash_fit3 <- lm(price ~ bathroom, data = monash)
+tidy(monash_fit3)
+glance(monash_fit3)
+
+monash_fit4 <- lm(price ~ landsize, data = house_impute_landsize )
+tidy(monash_fit4)
+glance(monash_fit4)
+
+monash_fit5 <- lm(price ~ car, data = house_impute_car )
+tidy(monash_fit5)
+glance(monash_fit5)
+
+monash_fit6 <- lm(price ~ date, data = monash)
+tidy(monash_fit6)
+glance(monash_fit6)
+```
+
+> interactions between price andother variables by different data summaries  typically goodness of fit measures, p-values for hypothesis tests on residuals, or model convergence information.
