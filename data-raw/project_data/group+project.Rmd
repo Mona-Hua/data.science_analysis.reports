@@ -1,0 +1,67 @@
+---
+title: "group work"
+author: "Bocong Zhao"
+date: "9/25/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+```
+
+```{r school data}
+school <- read_csv(file="school_tidy.csv")%>%
+  clean_names()%>% 
+  select(name,locality,rank, median_vce_study_score,percentage_study_scores40and_more)
+
+public_school <- read_csv(file="public high school.csv")%>%
+  clean_names() %>% 
+  rename(school_name=x2)%>%
+  drop_na() %>% 
+  select(school_name, school_sector,total_enrolment)
+
+ private_school <- read_csv(file="private high school.csv")%>%
+  clean_names() %>% 
+  select(-x8,-x9)%>%
+  drop_na()%>% 
+  select(school_name, school_sector,total_enrolment) %>% 
+   mutate(total_enrolment = as.numeric(total_enrolment))
+```
+```{r}
+library(visdat)
+vis_dat(school)
+vis_dat(private_school)
+vis_dat(public_school)
+
+```
+
+```{r join data}
+library(naniar)
+classes <- function(x) map_chr(x, class)
+
+classes(private_school)
+classes(public_school)
+
+
+ school_private<- school %>% 
+  left_join(private_school, by = c("name" = "school_name")) 
+ 
+ school_public<- school %>%
+  left_join(public_school, by = c("name" = "school_name")) 
+  
+  
+  
+ school_private %>% vis_dat()
+ vis_miss(school_private,sort_miss = TRUE,warn_large_data = FALSE)+theme(aspect.ratio = 1)
+
+  school_public %>% vis_dat()
+ vis_miss(school_public,sort_miss = TRUE,warn_large_data = FALSE)+theme(aspect.ratio = 1)
+ 
+school_private<- as.tibble(school_private) %>%
+drop_na()
+
+school_public<- as.tibble(school_public) %>%
+drop_na()
+```
