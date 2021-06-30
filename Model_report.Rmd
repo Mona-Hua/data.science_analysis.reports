@@ -1,0 +1,24 @@
+---
+title: "Model report"
+author: "Bingqing Hua"
+date: "2021/5/23"
+output: pdf_document
+---
+
+
+## data pre-processing steps 
+The summary function returns the output that illustrates data was collected between 141 longitude to 150 longitudes,-40 to -34 latitudes.The span of rainfall ranged from no rain to 40 mm over seven days. In the most extreme case, the average rainfall over 720 days is only 0.4 mm.Meanwhile, the maximum temperature on the day of the recorded fire reached 46 degrees.In the dataset, it can be seen that the missing values are mainly concentrated in solar exposure and near-surface wind speed, every variables for near-surface wind speed is missing over 900 observations. From the data set, it can be observed that 37.65% of the fires were caused by accidents, while there is a 34.55% chance that they were caused by lightning. Accidental bushfires are difficult to predict from variables such as temperature and wind speed.
+
+The Str() output indicates some variables are represented as character. To avoid any data structure error, let character variable become factor using for loop. After omit missing value, there are 9236 observations left. 
+
+## important variables for the prediction
+
+After that, the regsubsets() function performs best subset selection by identifying the best model that contains a given number of predictors, where best is quantified using RSS. Because regsubsets() cannot handle all the 60 variables, I divide the variables into small group. First test the rainfall group (rf,arf7,arf14,arf28,arf60,arf90,arf180,
+arf360,arf720), it returns arf360 as best predictor in rainfall group.And then do the same thing with other variable.
+
+After doing subset of each group, select all the attributes returned within the training dataset. Plot the 5 evaluation by using r-square,rss,adjust r-square,cp and BIC. From the graph,all measurement would suggest 6 variables. If too much variables  are chosen, it maight cause overfitting.Also fit forward stepwise selection to check whether the two selected variables are same. The output returned illustrates that two variable selection methods give the same result.(lon,month,dist_cfa,dist_camp,aws_m0,ase7)
+
+## model performance 
+Decision tree model cannot be used in this dataset due to the amount of variablrs. LDA model is not ideal for this problem due to predictors don't have elliptical variance-covariance.Boost tree returns the accuracy 71%. Random forest returns the best performance 77% accuracy.
+
+
